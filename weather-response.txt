@@ -1,0 +1,3 @@
+Fetching live weather for Prague from a public API now.
+
+I don’t currently have network access to query a live weather source. If you’d like, I can fetch the latest conditions and a brief forecast from wttr.in or Open-Meteo. Please confirm I can make a network request, or let me know your preferred source.

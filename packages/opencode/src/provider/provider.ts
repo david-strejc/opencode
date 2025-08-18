@@ -25,6 +25,26 @@ export namespace Provider {
   type Source = "env" | "config" | "custom" | "api"
 
   const CUSTOM_LOADERS: Record<string, CustomLoader> = {
+    async chatgpt() {
+      // ChatGPT Plus/Pro OAuth provider
+      const auth = await Auth.get("chatgpt")
+      if (!auth || auth.type !== "oauth") return { autoload: false }
+      
+      // Import our custom ChatGPT SDK
+      const { ChatGPTSDK } = await import("./chatgpt-sdk")
+      
+      return {
+        autoload: true,
+        async getModel(sdk: any, modelID: string) {
+          // Create a custom ChatGPT provider and return its language model
+          const chatgptProvider = ChatGPTSDK.createChatGPT()
+          return chatgptProvider.languageModel(modelID)
+        },
+        options: {
+          // No API key needed - uses OAuth tokens
+        },
+      }
+    },
     async anthropic() {
       return {
         autoload: false,
@@ -137,7 +157,11 @@ export namespace Provider {
 
   const state = App.state("provider", async () => {
     const config = await Config.get()
-    const database = await ModelsDev.get()
+    let database = await ModelsDev.get()
+    
+    // Register ChatGPT models
+    const { registerChatGPTModels } = await import("./chatgpt-models")
+    database = registerChatGPTModels(database)
 
     const providers: {
       [providerID: string]: {
@@ -302,6 +326,18 @@ export namespace Provider {
       const s = await state()
       const existing = s.sdk.get(provider.id)
       if (existing) return existing
+      
+      // Special handling for ChatGPT provider
+      if (provider.id === "chatgpt") {
+        const { ChatGPTSDK } = await import("./chatgpt-sdk")
+        const loaded = ChatGPTSDK.createChatGPT({
+          name: provider.id,
+          ...s.providers[provider.id]?.options,
+        })
+        s.sdk.set(provider.id, loaded)
+        return loaded as SDK
+      }
+      
       const pkg = provider.npm ?? provider.id
       const mod = await import(await BunProc.install(pkg, "latest"))
       const fn = mod[Object.keys(mod).find((key) => key.startsWith("create"))!]

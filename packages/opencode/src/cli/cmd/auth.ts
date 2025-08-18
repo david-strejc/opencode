@@ -106,10 +106,11 @@ export const AuthLoginCommand = cmd({
       const priority: Record<string, number> = {
         anthropic: 0,
         "github-copilot": 1,
-        openai: 2,
-        google: 3,
-        openrouter: 4,
-        vercel: 5,
+        chatgpt: 2,
+        openai: 3,
+        google: 4,
+        openrouter: 5,
+        vercel: 6,
       }
       let provider = await prompts.autocomplete({
         message: "Select provider",
@@ -128,6 +129,10 @@ export const AuthLoginCommand = cmd({
               hint: priority[x.id] === 0 ? "recommended" : undefined,
             })),
           ),
+          {
+            value: "chatgpt",
+            label: "ChatGPT (Plus/Pro)",
+          },
           {
             value: "other",
             label: "Other",

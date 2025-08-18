@@ -1,0 +1,8 @@
+{
+  "chatgpt": {
+    "id": "chatgpt",
+    "name": "ChatGPT",
+    "env": [],
+    "models": {}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "opencode-chatgpt-auth",
+  "version": "1.0.0",
+  "description": "ChatGPT OAuth authentication plugin for OpenCode",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "workspace:*",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

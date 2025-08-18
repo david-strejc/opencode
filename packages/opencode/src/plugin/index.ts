@@ -27,6 +27,7 @@ export namespace Plugin {
     if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
       plugins.push("opencode-copilot-auth")
       plugins.push("opencode-anthropic-auth")
+      plugins.push("file:///home/david/Work/Programming/coders/opencode/packages/opencode-chatgpt-auth/src/index.ts")
     }
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
