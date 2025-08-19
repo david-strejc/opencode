@@ -30,7 +30,7 @@ export namespace ChatGPTSDK {
   }
 
   // Create a ChatGPT provider instance
-  export function createChatGPT(options: any = {}) {
+  export function createChatGPT(_options: any = {}) {
     return {
       languageModel(modelID: string) {
         return new ChatGPTLanguageModel(modelID)
@@ -88,7 +88,12 @@ export namespace ChatGPTSDK {
     async doStream(options: any) {
       // For streaming, we use the same logic as doGenerate but handle streaming response
       options.mode = { type: "streaming" }
-      const result = await this.doGenerate(options)
+      const result = await this.doGenerate(options) as any
+      
+      // Check if result has stream property (streaming response)
+      if (!result.stream) {
+        throw new Error('Expected streaming response from doGenerate')
+      }
       
       // Transform the result to match AI SDK's expected format
       // The AI SDK expects chunks with 'delta' property internally
@@ -109,7 +114,7 @@ export namespace ChatGPTSDK {
       
       return {
         stream: result.stream.pipeThrough(transformStream),
-        rawResponse: result.rawResponse,
+        rawResponse: result.rawResponse || new Response(),
         warnings: result.warnings || []
       }
     }
@@ -145,7 +150,8 @@ export namespace ChatGPTSDK {
       }
     }
 
-    async doGenerate(options: any) {
+    async doGenerate(_options: any) {
+    const options = _options
       // Handle both messages array and prompt object
       let messages = options.messages || []
       
@@ -194,6 +200,12 @@ export namespace ChatGPTSDK {
 
       // Convert tools from AI SDK format to ChatGPT Codex format
       const tools = this.convertToolsToCodexFormat(options.tools || {})
+      
+      // Debug: Check if tools are being sent
+      console.error(`DEBUG: Converted ${tools.length} tools for ChatGPT`)
+      if (tools.length > 0) {
+        console.error(`DEBUG: Tool names: ${tools.map(t => t.name).join(', ')}`)
+      }
 
       // Build request for Codex API matching EXACT Codex implementation
       const request: any = {
@@ -239,7 +251,7 @@ export namespace ChatGPTSDK {
       return this.handleRegularResponse(response, options)
     }
 
-    async handleStreamingResponse(response: Response, options: any) {
+    async handleStreamingResponse(response: Response, _options: any) {
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let buffer = ""
@@ -276,6 +288,11 @@ export namespace ChatGPTSDK {
                   try {
                     const event = JSON.parse(data)
                     
+                    // Debug: Log any function-related events
+                    if (event.type && event.type.includes('function')) {
+                      console.error(`DEBUG: Function event: ${event.type}`)
+                    }
+                    
                     // Extract text from delta events - match the actual Codex API response
                     if (event.type === "response.output_text.delta" && event.delta) {
                       // Emit text-start on first text delta
@@ -298,18 +315,36 @@ export namespace ChatGPTSDK {
                       let parsedArgs = {}
                       try {
                         parsedArgs = JSON.parse(event.arguments || "{}")
+                        
+                        // Skip empty tool calls - ChatGPT sometimes generates incomplete calls
+                        const hasValidArgs = Object.keys(parsedArgs).length > 0
+                        if (!hasValidArgs) {
+                          console.error(`DEBUG: Skipping empty tool call`)
+                          return
+                        }
+                        
                         // Try to determine tool from arguments
-                        if (parsedArgs.command) toolName = "bash"
-                        else if (parsedArgs.filePath || parsedArgs.content) toolName = "write"
-                      } catch (e) {}
-                      
-                      // Send complete tool call to AI SDK
-                      controller.enqueue({
-                        type: "tool-call",
-                        id: event.item_id || event.id || "tool",
-                        toolName,
-                        args: parsedArgs
-                      })
+                        const args = parsedArgs as any
+                        if (args.command) toolName = "bash"
+                        else if (args.filePath || args.content) toolName = "write"
+                        else if (args.pattern) toolName = "grep"
+                        else if (args.path && !args.filePath) toolName = "list"
+                        
+                        console.error(`DEBUG: Tool call completed - ${toolName}:`, JSON.stringify(parsedArgs, null, 2))
+                        
+                        // Send complete tool call to AI SDK with correct format
+                        const toolCall = {
+                          type: "tool-call",
+                          toolCallId: event.item_id || event.id || "tool",
+                          toolName,
+                          input: parsedArgs  // AI SDK expects 'input', not 'args'
+                        }
+                        console.error(`DEBUG: Sending tool call to AI SDK:`, toolCall)
+                        controller.enqueue(toolCall)
+                        
+                      } catch (e) {
+                        console.error(`DEBUG: Failed to parse tool args:`, e, event.arguments)
+                      }
                     }
                   } catch (e) {
                     // Skip parsing errors
@@ -331,7 +366,7 @@ export namespace ChatGPTSDK {
       }
     }
 
-    async handleRegularResponse(response: Response, options: any) {
+    async handleRegularResponse(response: Response, _options: any) {
       const data = await response.json()
       
       // Extract text from response
